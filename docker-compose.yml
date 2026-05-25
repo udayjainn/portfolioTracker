@@ -1,0 +1,72 @@
+version: "3.8"
+
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/portfolio_tracker
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - AWS_S3_BUCKET=portfolio-tracker-dev
+      - AWS_S3_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - FIREBASE_PROJECT_ID=portfolio-tracker-dev
+      - CORS_ORIGINS=["http://localhost:3000"]
+      - ENVIRONMENT=development
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery-worker:
+    build: ./pipeline
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/portfolio_tracker
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - AWS_S3_BUCKET=portfolio-tracker-dev
+      - AWS_S3_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - FIREBASE_PROJECT_ID=portfolio-tracker-dev
+      - CONTACT_EMAIL=dev@portfoliotracker.com
+      - ENVIRONMENT=development
+    depends_on:
+      - db
+      - redis
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+
+  celery-beat:
+    build: ./pipeline
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/portfolio_tracker
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - ENVIRONMENT=development
+    depends_on:
+      - redis
+    command: celery -A app.celery_app beat --loglevel=info
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=portfolio_tracker
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
