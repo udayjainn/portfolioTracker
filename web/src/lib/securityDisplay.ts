@@ -6,7 +6,8 @@ const CUSIP_PATTERN = /^[A-Z0-9]{9}$/i;
 export function isUnresolvedSecurity(
   security: Pick<SecurityBrief, "ticker" | "name" | "exchange">
 ): boolean {
-  if (security.exchange === "UNKNOWN") return true;
+  if (security.exchange === "UNKNOWN" || security.exchange === "CUSIP") return true;
+  if (security.ticker === "UNRESOLVED") return true;
   if (security.name.startsWith("Unknown")) return true;
   return CUSIP_PATTERN.test(security.ticker.trim());
 }

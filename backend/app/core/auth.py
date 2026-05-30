@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import UnauthorizedException
+from app.core.firebase import ensure_firebase
 from app.database import get_db
 from app.models.user import User
 
@@ -17,6 +18,7 @@ async def get_current_user(
     token = authorization.removeprefix("Bearer ")
 
     try:
+        ensure_firebase()
         import firebase_admin.auth as firebase_auth
 
         decoded = firebase_auth.verify_id_token(token)

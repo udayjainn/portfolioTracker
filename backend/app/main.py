@@ -14,6 +14,7 @@ from app.core.exceptions import (
     not_found_handler,
     unauthorized_handler,
 )
+from app.core.firebase import init_firebase
 from app.database import engine
 
 if settings.SENTRY_DSN:
@@ -24,6 +25,7 @@ if settings.SENTRY_DSN:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_firebase()
     await init_redis(settings.REDIS_URL)
     yield
     await close_redis()

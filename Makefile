@@ -1,4 +1,4 @@
-.PHONY: dev dev-down dev-setup test-backend test-pipeline test-web test migrate seed web fmt ingest-13f ingest-13f-bulk
+.PHONY: dev dev-down dev-setup test-backend test-pipeline test-web test migrate seed web fmt ingest-13f ingest-13f-bulk fix-securities
 
 # Host Postgres port when 5432 is already in use (see docker-compose.yml)
 DOCKER_DATABASE_URL ?= postgresql+asyncpg://postgres:postgres@localhost:5433/portfolio_tracker
@@ -33,6 +33,9 @@ migrate:
 
 seed:
 	docker compose exec api python -m app.scripts.seed_investors
+
+fix-securities:
+	docker compose exec celery-worker python -m app.scripts.fix_unresolved_securities
 
 ingest-13f:
 ifdef INGEST_LIMIT
