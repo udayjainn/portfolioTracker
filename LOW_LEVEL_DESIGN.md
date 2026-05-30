@@ -1,64 +1,68 @@
 # Portfolio Tracker - Low Level Design Document
 
-**Version:** 2.0
-**Last Updated:** 2026-05-25
-**Infrastructure Strategy:** Railway (Phase 1) → AWS (Phase 2, at scale)
+**Version:** 2.2 (Phase 1 decisions integrated)
+**Last Updated:** 2026-05-29
+**Infrastructure Strategy:** Vercel + Neon + Upstash + Railway (Phase 1) → AWS (Phase 2, at scale)
 **Development Order:** Website first → Mobile apps second
+
+**Authoritative decision log:** [docs/DECISIONS.md](docs/DECISIONS.md) (locked rows) · **Execution checklist:** [docs/ACTION_PLAN.md](docs/ACTION_PLAN.md) · **Phase 1 infra:** [docs/INFRA_PHASE1.md](docs/INFRA_PHASE1.md)
+
+---
+
+## 0. Phase 1 locked decisions (summary)
+
+This section mirrors locked rows in [docs/DECISIONS.md](docs/DECISIONS.md). Where older sections below still describe the original v2.0 plan, **this section and DECISIONS win** for Phase 1.
+
+| Area | Phase 1 decision |
+|------|------------------|
+| **Countries** | US only; CA/UK/IN UI tabs show **Coming soon** (P2, P8b) |
+| **Investor data** | ~**50** US institutional funds; **13F only** — no Form 4 insiders (P3, P4, D1b) |
+| **US ingest** | [SEC 13F bulk ZIP](https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets) + **`edgartools`** daily incremental (D1, D3) — not custom EFTS/XML scraping |
+| **Raw filing storage** | `filings.raw_data` JSONB only — **no S3** (D2, S7) |
+| **Prices** | Values from 13F; no `security_prices` fill (D4) |
+| **Auth** | **Optional** login; **watchlist only** when signed in — no forced signup (P5, P5b) |
+| **Web pages** | Home, investors, **`/securities`** list + `[ticker]` detail, search, **`/compare`**, **`/activity`** (P8); minimal watchlist UI; **no** `/dashboard` (Phase 2) |
+| **Web stack** | Next **16**, React **19**, Tailwind **4**, TanStack Query, Zustand, Recharts (W1–W8) |
+| **Hosting** | **Vercel** (web), **Railway** (API + pipeline), **Neon** (Postgres), **Upstash** (Redis), **Firebase Auth**, **Sentry** optional (S*, A1, A3) |
+| **Celery beat** | US 13F tasks only; **disable** intl scrapers until Phase 2 (D5) |
+| **Deferred to Phase 2** | Form 4, S3, stock prices, dashboard, alerts, FCM, full intl pipelines |
 
 ---
 
 ## 1. System Overview
 
-A platform to track celebrity and institutional investor portfolios across USA, Canada, UK, and India. Delivered as a Next.js website (launched first), then Flutter mobile apps (Android + iOS), backed by a Python FastAPI backend with automated data pipelines. Hosted on Railway for Phase 1, with a clear migration path to AWS at scale.
+A platform to track institutional investor portfolios from regulatory filings, starting with **US SEC 13F** data. Delivered as a **Next.js** website on **Vercel** (launched first), then Flutter mobile apps, backed by **FastAPI** on **Railway** and ingestion jobs on **Railway**, with **Neon** Postgres and **Upstash** Redis. Multi-country expansion (Canada, UK, India) is **Phase 2**.
 
-### 1.1 Architecture Diagram — Phase 1 (Railway)
+### 1.1 Architecture Diagram — Phase 1 (locked)
 
 ```
-                           ┌──────────────┐
-                           │  CloudFlare   │
-                           │  DNS + CDN    │
-                           │  SSL + DDoS   │
-                           └──────┬───────┘
-                                  │
-                   ┌──────────────┼──────────────┐
-                   │              │              │
-             ┌─────▼─────┐ ┌─────▼─────┐ ┌─────▼─────┐
-             │  Next.js   │ │  Flutter   │ │  Flutter   │
-             │  Website   │ │  Android   │ │   iOS      │
-             │ (Vercel)   │ │ (Phase 2)  │ │ (Phase 2)  │
-             └─────┬──────┘ └─────┬──────┘ └─────┬─────┘
-                   │              │              │
-                   └──────────────┼──────────────┘
-                                  │ HTTPS
-                    ┌─────────────▼──────────────┐
-                    │                            │
-                    │   RAILWAY PROJECT          │
-                    │                            │
-                    │  ┌──────────┐ ┌─────────┐  │
-                    │  │ FastAPI  │ │ Celery  │  │
-                    │  │ API      │ │ Worker  │  │
-                    │  │ Service  │ │ Service │  │
-                    │  └────┬─────┘ └────┬────┘  │
-                    │       │            │       │
-                    │  ┌────▼────┐ ┌─────▼────┐  │
-                    │  │Postgres │ │  Redis   │  │
-                    │  │ Plugin  │ │  Plugin  │  │
-                    │  └─────────┘ └──────────┘  │
-                    │                            │
-                    │  ┌──────────┐              │
-                    │  │ Celery   │              │
-                    │  │ Beat     │              │
-                    │  │ Service  │              │
-                    │  └──────────┘              │
-                    │                            │
-                    └────────────────────────────┘
-                                  │
-                    ┌─────────────┼──────────────┐
-                    │             │              │
-              ┌─────▼──┐   ┌─────▼────┐  ┌──────▼─────┐
-              │ AWS S3  │   │ Firebase │  │  Sentry    │
-              │ (files) │   │ Auth+FCM │  │ (errors)   │
-              └────────┘   └──────────┘  └────────────┘
+                    ┌──────────────┐
+                    │  CloudFlare   │  (optional DNS)
+                    └──────┬───────┘
+                           │
+              ┌────────────┴────────────┐
+              │                           │
+        ┌─────▼─────┐             ┌─────▼─────┐
+        │  Next.js  │             │  FastAPI  │
+        │  Vercel   │             │  Railway  │
+        └─────┬─────┘             └─────┬─────┘
+              │                         │
+              │    ┌────────────────────┤
+              │    │                    │
+        ┌─────▼────▼─────┐       ┌──────▼──────┐
+        │ Firebase Auth  │       │  Railway    │
+        │ (optional login)│       │  pipeline   │
+        └────────────────┘       │ worker+beat │
+                                 └──────┬──────┘
+                                        │
+              ┌─────────────────────────┼─────────────────┐
+              │                         │                 │
+        ┌─────▼─────┐            ┌──────▼──────┐   ┌──────▼──────┐
+        │   Neon    │            │  Upstash    │   │ SEC bulk +  │
+        │ Postgres  │            │   Redis     │   │ edgartools  │
+        └───────────┘            └─────────────┘   └─────────────┘
+
+        Sentry (optional) · Flutter apps Phase 3 · AWS Phase 2 at scale
 ```
 
 ### 1.2 Architecture Diagram — Phase 2 (AWS, at scale)
@@ -96,7 +100,7 @@ A platform to track celebrity and institutional investor portfolios across USA, 
 
 | Trigger | Threshold | Why |
 |---|---|---|
-| Database size | > 8GB RAM or 50GB disk | Railway PostgreSQL max limits |
+| Database size | > 8GB RAM or 50GB disk | Neon/RDS limits (Phase 1 uses Neon) |
 | Concurrent users | > 50K DAU | Need horizontal auto-scaling |
 | Traffic spikes | API p95 latency > 500ms under load | Need ALB + auto-scaling groups |
 | Revenue | Monthly revenue > $2K | Can afford DevOps + AWS costs |
@@ -379,20 +383,21 @@ migrations/
 │   └── 008_create_security_prices.py
 ```
 
-### 2.4 Database Configuration on Railway
+### 2.4 Database Configuration — Phase 1 (Neon)
+
+**Locked (S2):** Managed **Neon** Postgres 16 — not Railway Postgres plugin.
 
 ```
-Railway Dashboard → New Plugin → PostgreSQL
+Neon project → connection string → DATABASE_URL (async: postgresql+asyncpg://...)
 
-Plan:           Pro ($5/month base, usage-based)
+Plan:           Free tier for development; scale tier as needed
 Version:        PostgreSQL 16
-RAM:            Up to 8GB (auto-scales)
-Storage:        Up to 50GB
-Backups:        Daily automatic (7-day retention)
-Connection URL: Provided as $DATABASE_URL env var (auto-injected)
+Backups:        Neon automatic backups on paid tiers
 ```
 
-**Connection pooling:** Railway doesn't provide built-in pooling. Add **PgBouncer** as a sidecar service or use SQLAlchemy's pool:
+Use the same `DATABASE_URL` on Railway **api** and **pipeline** services.
+
+**Connection pooling:** Neon pooler endpoint optional, or SQLAlchemy pool:
 
 ```python
 # database.py
@@ -526,24 +531,25 @@ EXPOSE $PORT
 CMD ["gunicorn", "app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:${PORT}"]
 ```
 
-### 3.3 Railway Environment Variables
+### 3.3 Environment Variables — Phase 1 (locked)
+
+**API service (Railway):**
 
 ```
-# Auto-injected by Railway plugins (no manual setup needed)
-DATABASE_URL              = ${{Postgres.DATABASE_URL}}
-REDIS_URL                 = ${{Redis.REDIS_URL}}
-
-# Set manually in Railway dashboard
+DATABASE_URL              = <Neon connection string>
+REDIS_URL                 = <Upstash Redis URL>
 FIREBASE_PROJECT_ID       = portfolio-tracker-prod
 FIREBASE_CREDENTIALS_JSON = <base64-encoded service account key>
-AWS_ACCESS_KEY_ID         = <for S3 access>
-AWS_SECRET_ACCESS_KEY     = <for S3 access>
-AWS_S3_BUCKET             = portfolio-tracker-filings
-AWS_S3_REGION             = us-east-1
-CORS_ORIGINS              = https://portfoliotracker.com,https://www.portfoliotracker.com
-SENTRY_DSN                = https://xxx@sentry.io/xxx
+CORS_ORIGINS              = https://<vercel-domain>,http://localhost:3000
+SENTRY_DSN                = optional
 ENVIRONMENT               = production
 ```
+
+**Pipeline service (Railway):** `DATABASE_URL`, `CELERY_BROKER_URL` (Upstash), `REDIS_URL`, `CONTACT_EMAIL` (SEC User-Agent policy)
+
+**Web (Vercel):** `NEXT_PUBLIC_API_URL`, Firebase web client config
+
+**Phase 1 omitted:** `AWS_*` / `AWS_S3_*` (no S3 per D2, S7). Add in Phase 2+ if raw filing archive required.
 
 ### 3.4 FastAPI Application Entry Point
 
@@ -865,6 +871,8 @@ async def cached(key: str, ttl: int, fetcher):
 
 ## 4. Data Pipeline Design
 
+**Locked ingest approach (Phase 1 US):** [docs/DECISIONS.md](docs/DECISIONS.md) **D1** — [SEC Form 13F bulk data sets](https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets) for quarterly backfill; [**edgartools**](https://edgartools.readthedocs.io/) for incremental 13F per tracked CIK. Steps 3–7 (resolve → notify) unchanged. Legacy §4.6 EFTS/XML scraper superseded at implementation time.
+
 ### 4.1 Project Structure
 
 ```
@@ -874,13 +882,15 @@ pipeline/
 │   ├── celery_app.py                # Celery configuration
 │   ├── config.py
 │   │
-│   ├── scrapers/                    # country-specific scrapers
-│   │   ├── base.py                  # abstract BaseScraper
+│   ├── ingestors/                   # Phase 1 US (was scrapers/)
+│   │   ├── base.py                  # ingest orchestration
 │   │   ├── us/
-│   │   │   ├── edgar_13f.py         # SEC 13F filings
-│   │   │   ├── edgar_form4.py       # insider transactions
-│   │   │   ├── edgar_13d.py         # activist positions
-│   │   │   └── edgar_client.py      # EDGAR API client
+│   │   │   ├── sec_13f_bulk.py      # SEC quarterly 13F ZIP → DB
+│   │   │   ├── sec_13f_incremental.py  # edgartools per CIK (daily)
+│   │   │   └── sec_form4.py         # Phase 2 only (D1b)
+│   │   ├── scrapers/                # legacy path; migrate to ingestors/
+│   │   │   ├── us/edgar_13f.py      # DEPRECATED → edgartools
+│   │   │   └── us/edgar_form4.py    # Phase 2
 │   │   ├── canada/
 │   │   │   ├── sedi_scraper.py      # insider reports
 │   │   │   └── sedar_scraper.py     # institutional filings
@@ -919,7 +929,8 @@ pipeline/
 │   │   └── email_sender.py          # email digests
 │   │
 │   └── tasks/                       # Celery task definitions
-│       ├── scraping_tasks.py
+│       ├── ingest_tasks.py          # Phase 1 (was scraping_tasks.py)
+│       ├── scraping_tasks.py        # legacy alias during migration
 │       ├── processing_tasks.py
 │       ├── notification_tasks.py
 │       └── maintenance_tasks.py
@@ -930,35 +941,19 @@ pipeline/
 └── railway.toml
 ```
 
-### 4.2 Railway Service Configuration (Pipeline)
+### 4.2 Railway Service Configuration (Pipeline) — Phase 1 (locked)
+
+**Locked (S4):** One Railway service **`pipeline`** runs **Celery worker + beat** in one container (e.g. supervisord or shell script). Separate `celery-beat` service is optional, not required for Phase 1.
 
 ```toml
-# pipeline/railway.toml — Celery Worker
-
-[build]
-builder = "DOCKERFILE"
-dockerfilePath = "./Dockerfile"
+# pipeline/railway.toml
 
 [deploy]
-startCommand = "celery -A app.celery_app worker --loglevel=info --concurrency=4"
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
+# Example: beat in background, worker in foreground
+startCommand = "celery -A app.celery_app beat --loglevel=info --detach && celery -A app.celery_app worker --loglevel=info --concurrency=4"
 ```
 
-```toml
-# pipeline/railway-beat.toml — Celery Beat (separate service, same code)
-
-[build]
-builder = "DOCKERFILE"
-dockerfilePath = "./Dockerfile"
-
-[deploy]
-startCommand = "celery -A app.celery_app beat --loglevel=info"
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
-```
-
-Both services share the same Docker image and codebase, just different start commands. In Railway, you create two services pointing to the same repo but with different `startCommand` overrides.
+`DATABASE_URL` and `CELERY_BROKER_URL` point to **Neon** and **Upstash**, not Railway plugins.
 
 ### 4.3 Pipeline Flow
 
@@ -967,16 +962,15 @@ Both services share the same Docker image and codebase, just different start com
               |
               v
      +----------------+
-     |  1. SCRAPE      |   Fetch raw filing from source
-     |                 |   Store raw file in S3
-     |                 |   Create filing record (status=PENDING)
+     |  1. INGEST      |   SEC 13F bulk ZIP (quarterly) OR edgartools (daily)
+     |                 |   Parsed holdings → filing.raw_data (JSONB)
+     |                 |   No S3 in Phase 1 (D2)
      +--------+-------+
               |
               v
      +----------------+
-     |  2. PARSE       |   Extract structured data from raw filing
-     |                 |   Handle XML, CSV, PDF, HTML formats
-     |                 |   Store parsed data in filing.raw_data (JSONB)
+     |  2. PARSE       |   edgartools / bulk mapper (US 13F)
+     |                 |   Legacy XML parser deprecated (§4.6)
      +--------+-------+
               |
               v
@@ -1016,51 +1010,27 @@ Both services share the same Docker image and codebase, just different start com
      +----------------+
 ```
 
-### 4.4 Celery Beat Schedule
+### 4.4 Celery Beat Schedule — Phase 1 (locked)
+
+**Locked (D5):** Only US 13F + maintenance tasks run in Phase 1. International and Form 4 tasks are **commented out** until Phase 2.
 
 ```python
-# celery_app.py
+# celery_app.py — Phase 1 beat_schedule
 
 beat_schedule = {
-    # --- USA ---
-    "scrape-edgar-13f": {
-        "task": "tasks.scraping_tasks.scrape_edgar_13f",
-        "schedule": crontab(hour=2, minute=0),          # daily 2 AM UTC
+    # --- USA (Phase 1) ---
+    "ingest-13f-incremental": {
+        "task": "app.tasks.ingest_tasks.ingest_13f_incremental",
+        "schedule": crontab(hour=2, minute=0),          # daily — edgartools per CIK
     },
-    "scrape-edgar-form4": {
-        "task": "tasks.scraping_tasks.scrape_edgar_form4",
-        "schedule": crontab(minute="*/30"),              # every 30 min (near real-time)
-    },
+    # Run bulk manually or on calendar when SEC publishes new ZIP (~quarterly):
+    # "ingest-13f-bulk": { "task": "...", "schedule": crontab(...) },
 
-    # --- CANADA ---
-    "scrape-sedi": {
-        "task": "tasks.scraping_tasks.scrape_sedi",
-        "schedule": crontab(hour=3, minute=0),           # daily 3 AM UTC
-    },
-
-    # --- UK ---
-    "scrape-companies-house": {
-        "task": "tasks.scraping_tasks.scrape_companies_house",
-        "schedule": crontab(hour=4, minute=0),           # daily 4 AM UTC
-    },
-    "scrape-rns-feed": {
-        "task": "tasks.scraping_tasks.scrape_rns_feed",
-        "schedule": crontab(hour="*/2", minute=0),       # every 2 hours
-    },
-
-    # --- INDIA ---
-    "scrape-bse-bulk-deals": {
-        "task": "tasks.scraping_tasks.scrape_bse_bulk_deals",
-        "schedule": crontab(hour=14, minute=0),          # 7:30 PM IST (after market close)
-    },
-    "scrape-nse-bulk-deals": {
-        "task": "tasks.scraping_tasks.scrape_nse_bulk_deals",
-        "schedule": crontab(hour=14, minute=30),
-    },
-    "scrape-sebi-mf-portfolios": {
-        "task": "tasks.scraping_tasks.scrape_sebi_mf",
-        "schedule": crontab(day_of_month=15, hour=5),    # monthly, 15th
-    },
+    # --- Phase 2 (disabled in Phase 1) ---
+    # "scrape-edgar-form4": ...
+    # "scrape-sedi": ...
+    # "scrape-companies-house": ...
+    # "scrape-bse-bulk-deals": ...
 
     # --- MAINTENANCE ---
     "update-security-prices": {
@@ -1129,10 +1099,20 @@ class BaseScraper(ABC):
         return key
 ```
 
-### 4.6 SEC EDGAR 13F Scraper (Example Implementation)
+### 4.6 US 13F ingestion — Phase 1 (replaces §4.6 EFTS/XML scraper)
+
+**Locked (D1):** Do not implement the EFTS + hand-written XML flow below for new code. Use:
+
+1. **Bulk:** Download quarterly ZIP from [SEC Form 13F Data Sets](https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets); load rows for seeded `firm_cik` values (~50 investors, P4).
+2. **Incremental:** Daily Celery task using **`edgartools`** (`Company(cik).get_filings(form="13F-HR")`) for new quarters.
+3. **Dependency:** `edgartools` in `pipeline/requirements.txt`; set `CONTACT_EMAIL` / User-Agent per SEC policy.
+
+Form 4 / `EdgarForm4Scraper` → **Phase 2** (D1b).
+
+#### Legacy reference only (deprecated)
 
 ```python
-# scrapers/us/edgar_13f.py
+# scrapers/us/edgar_13f.py — DEPRECATED; do not extend
 
 class Edgar13FScraper(BaseScraper):
     FULL_INDEX_URL = "https://www.sec.gov/Archives/edgar/full-index"
@@ -1301,15 +1281,13 @@ web/
 │   │   ├── activity/
 │   │   │   └── page.tsx              # real-time activity feed
 │   │   │
-│   │   ├── dashboard/                # authenticated user pages
-│   │   │   ├── layout.tsx            # dashboard layout with sidebar
-│   │   │   ├── page.tsx              # dashboard home — personalized feed
-│   │   │   ├── watchlist/
-│   │   │   │   └── page.tsx
-│   │   │   ├── alerts/
-│   │   │   │   └── page.tsx
-│   │   │   └── settings/
-│   │   │       └── page.tsx
+│   │   ├── watchlist/                # Phase 1 (P5b) — simple list
+│   │   │   └── page.tsx
+│   │   ├── dashboard/                # Phase 2 — feed, alerts, settings
+│   │   │   ├── layout.tsx
+│   │   │   ├── page.tsx
+│   │   │   ├── alerts/page.tsx
+│   │   │   └── settings/page.tsx
 │   │   │
 │   │   ├── auth/
 │   │   │   ├── login/page.tsx
@@ -1437,41 +1415,39 @@ web/
 
 ### 5.2 Key Web Packages
 
+Locked to the committed scaffold in `web/package.json` (see [docs/PRE_BUILD_STACK_DECISIONS.md](docs/PRE_BUILD_STACK_DECISIONS.md)):
+
 ```json
 {
   "dependencies": {
-    "next": "^14.2.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "typescript": "^5.4.0",
+    "next": "16.2.x",
+    "react": "19.2.x",
+    "react-dom": "19.2.x",
+    "typescript": "^5.x",
 
-    "tailwindcss": "^3.4.0",
-    "@headlessui/react": "^1.7.0",
-    "@heroicons/react": "^2.1.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.0",
+    "tailwindcss": "^4.x",
+    "@tailwindcss/postcss": "^4.x",
+    "@heroicons/react": "^2.2.x",
+    "clsx": "^2.1.x",
+    "tailwind-merge": "^3.x",
 
-    "@tanstack/react-query": "^5.28.0",
-    "zustand": "^4.5.0",
+    "@tanstack/react-query": "^5.100.x",
+    "zustand": "^5.x",
 
-    "recharts": "^2.12.0",
-    "date-fns": "^3.6.0",
+    "recharts": "^3.x",
+    "date-fns": "^4.x",
     "numeral": "^2.0.6",
 
-    "firebase": "^10.9.0",
-
-    "@sentry/nextjs": "^7.100.0"
+    "firebase": "^12.x"
   },
   "devDependencies": {
-    "@testing-library/react": "^14.2.0",
-    "@testing-library/jest-dom": "^6.4.0",
-    "jest": "^29.7.0",
-    "@playwright/test": "^1.42.0",
-    "eslint": "^8.57.0",
-    "prettier": "^3.2.0"
+    "eslint": "^9.x",
+    "eslint-config-next": "16.2.x"
   }
 }
 ```
+
+**Phase 1 optional adds:** `@sentry/nextjs`, `@headlessui/react`, Jest/Playwright per [docs/REVISED_PHASE1_MVP.md](docs/REVISED_PHASE1_MVP.md) week 5–6.
 
 ### 5.3 Page-by-Page Design
 
@@ -1488,7 +1464,7 @@ web/
 |                                                                    |
 +------------------------------------------------------------------+
 |                                                                    |
-|  COUNTRY TABS:  [US]  [India]  [UK]  [Canada]  [All]             |
+|  COUNTRY TABS:  [US]  [India*]  [UK*]  [Canada*]  (* = Coming soon, P8b) |
 |                                                                    |
 +------------------------------------------------------------------+
 |                                                                    |
@@ -2314,37 +2290,36 @@ volumes:
   postgres_data:
 ```
 
-### 8.2 Production Architecture — Phase 1 (Railway)
+### 8.2 Production Architecture — Phase 1 (locked)
 
-#### Railway Project Layout
+See [docs/INFRA_PHASE1.md](docs/INFRA_PHASE1.md). Summary:
+
+#### Services
+
+```
+Vercel          → web/          (Next.js 16, public site)
+Railway api     → backend/      (FastAPI)
+Railway pipeline→ pipeline/     (Celery worker + beat, one service)
+Neon            → Postgres 16   (DATABASE_URL)
+Upstash         → Redis         (REDIS_URL, CELERY_BROKER_URL)
+Firebase        → Auth only     (optional login, watchlist)
+Sentry          → errors        (optional)
+```
+
+#### Railway project (no Postgres/Redis plugins)
 
 ```
 Railway Project: "Portfolio Tracker"
 |
 +-- Service: api
-|   Source:    github.com/you/portfolioTracker (root: /backend)
-|   Type:     Web Service
-|   Domain:   api.portfoliotracker.com
-|   Start:    gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker
-|   Health:   /health
+|   Root: /backend
+|   Domain: api.<your-domain>
 |
-+-- Service: celery-worker
-|   Source:   github.com/you/portfolioTracker (root: /pipeline)
-|   Type:     Worker (no public URL)
-|   Start:   celery -A app.celery_app worker --loglevel=info --concurrency=4
++-- Service: pipeline
+|   Root: /pipeline
+|   Start: worker + beat (single service)
 |
-+-- Service: celery-beat
-|   Source:   github.com/you/portfolioTracker (root: /pipeline)
-|   Type:     Worker (no public URL)
-|   Start:   celery -A app.celery_app beat --loglevel=info
-|
-+-- Plugin: PostgreSQL
-|   Version:  16
-|   Exposes:  $DATABASE_URL (auto-injected into all services)
-|
-+-- Plugin: Redis
-    Version:  7
-    Exposes:  $REDIS_URL (auto-injected into all services)
+# DATABASE_URL, REDIS_URL from Neon + Upstash dashboards (shared variables)
 ```
 
 #### Railway Deployment Flow
@@ -2381,9 +2356,12 @@ Railway detects push (GitHub integration)
 ```
 Railway Dashboard → Project Settings → Shared Variables
 
-DATABASE_URL     = ${{Postgres.DATABASE_URL}}          # auto-linked
-REDIS_URL        = ${{Redis.REDIS_URL}}                # auto-linked
-CELERY_BROKER_URL = ${{Redis.REDIS_URL}}/1             # separate Redis DB for Celery
+DATABASE_URL      = <from Neon dashboard>
+REDIS_URL         = <from Upstash>
+CELERY_BROKER_URL = <Upstash URL, db /1>
+FIREBASE_*        = ...
+CORS_ORIGINS      = https://<vercel-app>.vercel.app
+# No AWS_S3_* in Phase 1
 
 # These are set once and shared across all services:
 FIREBASE_PROJECT_ID       = portfolio-tracker-prod
@@ -2681,8 +2659,11 @@ portfolioTracker/
 │   ├── env.py
 │   └── versions/
 │
-├── docs/                     # additional documentation
-│   └── LOW_LEVEL_DESIGN.md
+├── docs/                     # pre-build decisions + Phase 1 plan (LLD canonical at repo root)
+│   ├── PRE_BUILD_STACK_DECISIONS.md
+│   ├── REVISED_PHASE1_MVP.md
+│   ├── IMPACT_MAP.md
+│   └── LOW_LEVEL_DESIGN.md   # pointer to ../LOW_LEVEL_DESIGN.md
 │
 ├── .github/
 │   └── workflows/
@@ -2753,50 +2734,45 @@ fmt:
 
 **Goal:** Launch a working website with US investor data.
 
+**Locked scope (see [docs/DECISIONS.md](docs/DECISIONS.md)):** US only; **13F institutional funds** (P3) via **SEC bulk + `edgartools`** (D1); **`/compare` + `/activity`** (P8); **optional login + watchlist** (P5); **infra:** [docs/INFRA_PHASE1.md](docs/INFRA_PHASE1.md). Form 4, prices, S3, dashboard, alerts, push → Phase 2.
+
+**Execution order:** See [docs/ACTION_PLAN.md](docs/ACTION_PLAN.md) after [docs/DECISIONS.md](docs/DECISIONS.md) is locked (supplements the boxes below).
+
 #### Weeks 1-2: Foundation
-- [ ] Initialize monorepo structure
-- [ ] Set up Railway project (PostgreSQL, Redis, API service)
+- [ ] Monorepo + Neon + Upstash + Railway (`api`, `pipeline`) + Vercel — see [docs/INFRA_PHASE1.md](docs/INFRA_PHASE1.md)
 - [ ] Database schema + Alembic migrations
-- [ ] FastAPI project scaffold with health check, CORS, error handling
-- [ ] Core models + schemas (investors, securities, holdings)
-- [ ] Firebase Auth integration
-- [ ] Seed database with top 50 US investors (manual entry of names, CIKs)
+- [ ] FastAPI health, CORS, error handling
+- [ ] Seed **~50** US institutional investors (names + CIKs) (P4)
+- [ ] Firebase Auth (optional login) + API JWT verification (P5)
 
 #### Weeks 3-4: Data Pipeline + Core API
-- [ ] SEC EDGAR 13F scraper + XML parser
-- [ ] SEC EDGAR Form 4 scraper (insider trades)
-- [ ] Security resolver (CUSIP → securities table)
-- [ ] Change detection pipeline
-- [ ] Celery Beat scheduling (deploy worker + beat on Railway)
-- [ ] API endpoints: investors list, detail, holdings, search
-- [ ] API endpoints: securities detail, holders
-- [ ] API endpoints: activity feed, trending, most bought/sold
-- [ ] Redis caching layer
+- [ ] SEC 13F **bulk ZIP** + **`edgartools`** incremental (D1)
+- [ ] Security resolver, change detection, snapshots
+- [ ] Celery beat: US 13F incremental only (D5)
+- [ ] API: investors, securities, search, trending, most bought/sold
+- [ ] API: **activity feed**, **compare** (P8)
+- [ ] Upstash Redis caching
 
 #### Weeks 5-6: Website Launch
-- [ ] Next.js project scaffold + Tailwind + Vercel deployment
-- [ ] Home page: hero, trending investors, recent activity, most bought/sold
-- [ ] Investor listing page with filters (country, type, sort)
-- [ ] Investor detail page: bio, holdings table, sector chart, history
-- [ ] Security detail page: price, holders list, recent changes
-- [ ] Search with autocomplete
-- [ ] SEO: SSR pages, metadata, sitemap, Open Graph tags
-- [ ] Responsive design (mobile web must work well)
-- [ ] CloudFlare DNS + SSL setup
-- [ ] **LAUNCH WEBSITE**
+- [ ] Vercel deploy; Next 16 / React 19 / Tailwind 4
+- [ ] Home: trending, activity, most bought/sold; **US tab active**, CA/UK/IN **Coming soon** (P8b)
+- [ ] Investors list + detail (holdings, sector chart — no live stock prices, D4)
+- [ ] Securities detail (holders; 13F values, not price chart required P1)
+- [ ] **/search**, **/compare**, **/activity** (P8)
+- [ ] Optional login + **Follow** → watchlist; minimal watchlist page (P5, P5b) — **no** full dashboard
+- [ ] SEO: SSR, sitemap, Open Graph
+- [ ] **LAUNCH**
 
 ### Phase 2: User Features + Multi-Country (Weeks 7-12)
 
 **Goal:** Add authenticated features, expand to 4 countries.
 
-#### Weeks 7-8: User Features
-- [ ] Login/signup flow (Google + email via Firebase)
-- [ ] Dashboard layout with personalized feed
-- [ ] Watchlists (add/remove investors + securities)
-- [ ] Alerts system (new holding, sold, position change)
-- [ ] Web push notifications (FCM service worker)
-- [ ] Notification center (in-app notifications list)
-- [ ] Compare investors page
+#### Weeks 7-8: User Features (Phase 2)
+- [ ] Dashboard layout + personalized `/me/feed` (watchlist exists in P1)
+- [ ] Alerts + FCM push (A2)
+- [ ] Form 4 insider pipeline (D1b)
+- [ ] Stock prices API optional (D4)
+- [ ] S3 raw filing archive optional (D2)
 
 #### Weeks 9-10: Canada + UK Scrapers
 - [ ] Canada: SEDI insider reports scraper + parser
