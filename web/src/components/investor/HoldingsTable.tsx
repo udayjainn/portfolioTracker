@@ -10,7 +10,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 
 export function HoldingsTable({ slug }: { slug: string }) {
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState("value_usd");
+  const [sort, setSort] = useState("-value_usd");
   const { data, isLoading } = useInvestorHoldings(slug, { sort, page, limit: 25 });
 
   if (isLoading) return <LoadingSpinner className="py-8" />;
@@ -30,9 +30,9 @@ export function HoldingsTable({ slug }: { slug: string }) {
           onChange={(e) => { setSort(e.target.value); setPage(1); }}
           className="rounded-md border px-3 py-1.5 text-sm"
         >
-          <option value="value_usd">Value</option>
-          <option value="pct_of_portfolio">% of Portfolio</option>
-          <option value="shares_change_pct">Change %</option>
+          <option value="-value_usd">Value (largest first)</option>
+          <option value="-pct_of_portfolio">% of Portfolio</option>
+          <option value="-shares_change_pct">Change %</option>
         </select>
       </div>
       <div className="overflow-x-auto">

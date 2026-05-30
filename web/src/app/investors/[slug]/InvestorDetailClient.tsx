@@ -15,7 +15,7 @@ import { PortfolioPieChart } from "@/components/investor/PortfolioPieChart";
 
 export function InvestorDetailClient({ slug }: { slug: string }) {
   const { data: investor, isLoading } = useInvestor(slug);
-  const { data: holdingsData } = useInvestorHoldings(slug, { limit: 25 });
+  const { data: holdingsData } = useInvestorHoldings(slug, { limit: 25, sort: "-value_usd" });
 
   if (isLoading) return <LoadingSpinner className="py-20" />;
   if (!investor) return <p className="py-20 text-center text-gray-500">Investor not found.</p>;

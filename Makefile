@@ -37,6 +37,9 @@ seed:
 fix-securities:
 	docker compose exec celery-worker python -m app.scripts.fix_unresolved_securities
 
+reprocess-investor:
+	docker compose exec celery-worker python -m app.scripts.reprocess_investor $(SLUG)
+
 ingest-13f:
 ifdef INGEST_LIMIT
 	docker compose exec celery-worker celery -A app.celery_app call \
