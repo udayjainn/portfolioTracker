@@ -5,14 +5,10 @@ export const COUNTRIES = [
   { code: "IN", name: "India", flag: "🇮🇳" },
 ] as const;
 
+/** Matches DB / LLD: named managers vs asset managers & large institutions. */
 export const INVESTOR_TYPES = [
-  { value: "HEDGE_FUND", label: "Hedge Fund" },
-  { value: "MUTUAL_FUND", label: "Mutual Fund" },
-  { value: "PENSION_FUND", label: "Pension Fund" },
-  { value: "INSURANCE", label: "Insurance" },
-  { value: "BANK", label: "Bank" },
-  { value: "CELEBRITY", label: "Celebrity" },
-  { value: "OTHER", label: "Other" },
+  { value: "INDIVIDUAL", label: "Investors" },
+  { value: "INSTITUTIONAL", label: "Institutions" },
 ] as const;
 
 export const CHANGE_TYPE_CONFIG = {
@@ -25,9 +21,9 @@ export const CHANGE_TYPE_CONFIG = {
 
 export const SORT_OPTIONS = {
   investors: [
-    { value: "name", label: "Name" },
-    { value: "portfolio_value", label: "Portfolio Value" },
-    { value: "holdings_count", label: "Holdings Count" },
+    { value: "name", label: "Name (A–Z)" },
+    { value: "-total_value_usd", label: "Portfolio Value" },
+    { value: "-total_positions", label: "Holdings Count" },
   ],
   holdings: [
     { value: "value_usd", label: "Value" },

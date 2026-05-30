@@ -25,16 +25,31 @@ class SecurityResolver:
 
         security = result.scalar_one_or_none()
         if security:
+            if identifier_type == "CUSIP":
+                clean_name = (name or "").strip()
+                if clean_name and clean_name.lower() != "unknown":
+                    if security.name.startswith("Unknown"):
+                        security.name = clean_name[:255]
+                if ticker:
+                    ticker_upper = ticker.upper()[:20]
+                    if security.exchange == "UNKNOWN" or security.ticker == security.cusip:
+                        security.ticker = ticker_upper
+                        security.exchange = "US"
             return security.id
 
         if identifier_type == "CUSIP":
-            display_ticker = (ticker or identifier).upper()[:20]
-            display_name = name or f"Unknown ({identifier})"
+            clean_name = (name or "").strip()
+            has_ticker = bool(ticker and ticker.strip())
+            display_ticker = ticker.upper()[:20] if has_ticker else "UNRESOLVED"
+            if clean_name and clean_name.lower() != "unknown":
+                display_name = clean_name[:255]
+            else:
+                display_name = f"Unknown ({identifier})"
             new_security = Security(
                 ticker=display_ticker,
-                name=display_name[:255],
+                name=display_name,
                 cusip=identifier,
-                exchange="US" if ticker else "UNKNOWN",
+                exchange="US" if has_ticker else "UNKNOWN",
                 country="US",
             )
             db.add(new_security)

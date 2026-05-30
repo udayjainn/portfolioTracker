@@ -1,7 +1,18 @@
-export function formatCurrency(value: number | null | undefined, currency = "USD"): string {
-  if (value == null) return "N/A";
-  const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
+/** JSON from FastAPI often serializes Decimal fields as strings. */
+export type NumericInput = number | string | null | undefined;
+
+export function toNumber(value: NumericInput): number | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function formatCurrency(value: NumericInput, currency = "USD"): string {
+  const num = toNumber(value);
+  if (num == null) return "N/A";
+  const abs = Math.abs(num);
+  const sign = num < 0 ? "-" : "";
   const symbol = currency === "USD" ? "$" : currency;
 
   if (abs >= 1e12) return `${sign}${symbol}${(abs / 1e12).toFixed(1)}T`;
@@ -11,15 +22,17 @@ export function formatCurrency(value: number | null | undefined, currency = "USD
   return `${sign}${symbol}${abs.toFixed(2)}`;
 }
 
-export function formatNumber(value: number | null | undefined): string {
-  if (value == null) return "N/A";
-  return new Intl.NumberFormat("en-US").format(value);
+export function formatNumber(value: NumericInput): string {
+  const num = toNumber(value);
+  if (num == null) return "N/A";
+  return new Intl.NumberFormat("en-US").format(num);
 }
 
-export function formatPercent(value: number | null | undefined): string {
-  if (value == null) return "N/A";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
+export function formatPercent(value: NumericInput): string {
+  const num = toNumber(value);
+  if (num == null) return "N/A";
+  const sign = num > 0 ? "+" : "";
+  return `${sign}${num.toFixed(1)}%`;
 }
 
 export function formatDate(dateStr: string | null | undefined): string {
@@ -45,11 +58,12 @@ export function formatRelativeDate(dateStr: string | null | undefined): string {
   return `${Math.floor(diffDays / 365)} years ago`;
 }
 
-export function formatLargeNumber(value: number | null | undefined): string {
-  if (value == null) return "N/A";
-  const abs = Math.abs(value);
-  if (abs >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
-  return value.toString();
+export function formatLargeNumber(value: NumericInput): string {
+  const num = toNumber(value);
+  if (num == null) return "N/A";
+  const abs = Math.abs(num);
+  if (abs >= 1e9) return `${(num / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${(num / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${(num / 1e3).toFixed(1)}K`;
+  return num.toString();
 }

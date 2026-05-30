@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useInvestors } from "@/hooks/useInvestors";
 import { InvestorCard } from "./InvestorCard";
 import { Pagination } from "@/components/shared/Pagination";
@@ -19,6 +19,10 @@ export function InvestorGrid({
 }) {
   const [page, setPage] = useState(1);
   const { data, isLoading } = useInvestors({ country, type, sort, page, limit: DEFAULT_PAGE_SIZE });
+
+  useEffect(() => {
+    setPage(1);
+  }, [country, type, sort]);
 
   if (isLoading) return <LoadingSpinner className="py-16" />;
   if (!data?.data?.length) return <EmptyState title="No investors found" description="Try adjusting your filters." />;

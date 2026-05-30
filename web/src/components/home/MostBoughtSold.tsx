@@ -8,8 +8,8 @@ import { SkeletonCard } from "@/components/shared/SkeletonCard";
 function SecurityRow({ item }: { item: Record<string, unknown> }) {
   const ticker = item.ticker as string;
   const name = item.name as string;
-  const count = item.investor_count as number;
-  const totalValue = item.total_value_usd as number;
+  const count = (item.buy_count ?? item.sell_count ?? item.investor_count) as number;
+  const totalValue = (item.total_value_added ?? item.total_value_removed ?? item.total_value_usd) as number;
 
   return (
     <div className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0">

@@ -6,8 +6,8 @@ export interface InvestorSummary {
   country: string;
   investor_type: string;
   firm_name: string | null;
-  net_worth_usd: number | null;
-  total_holdings_value: number | null;
+  net_worth_usd: number | string | null;
+  total_holdings_value: number | string | null;
   positions_count: number | null;
 }
 

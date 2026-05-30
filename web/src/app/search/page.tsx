@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSearch } from "@/hooks/useSearch";
 import { formatCurrency } from "@/lib/formatters";
+import { investorDisplayTitle, investorTypeLabel } from "@/lib/investorDisplay";
 import { CountryFlag } from "@/components/shared/CountryFlag";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -45,11 +46,11 @@ export default function SearchPage() {
                 className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 hover:border-blue-300"
               >
                 <div>
-                  <p className="font-medium text-gray-900">{inv.name}</p>
-                  <p className="text-sm text-gray-500">{inv.investor_type}</p>
+                  <p className="font-medium text-gray-900">{investorDisplayTitle(inv)}</p>
+                  <p className="text-sm text-gray-500">{investorTypeLabel(inv.investor_type)}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{formatCurrency(inv.portfolio_value_usd)}</span>
+                  <span className="text-sm font-medium">{formatCurrency(inv.total_holdings_value)}</span>
                   <CountryFlag code={inv.country} />
                 </div>
               </Link>

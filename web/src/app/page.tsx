@@ -7,7 +7,7 @@ import { MostBoughtSold } from "@/components/home/MostBoughtSold";
 import { RecentActivity } from "@/components/home/RecentActivity";
 
 export default function Home() {
-  const [country, setCountry] = useState<string | undefined>(undefined);
+  const [country, setCountry] = useState<string | undefined>("US");
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">

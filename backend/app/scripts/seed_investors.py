@@ -10,6 +10,33 @@ from app.models.investor import Investor
 
 logger = logging.getLogger(__name__)
 
+# Large asset managers / banks (brand = firm). Everyone else is a named fund manager (INDIVIDUAL).
+INSTITUTIONAL_SLUGS = frozenset({
+    "blackrock",
+    "vanguard",
+    "fidelity",
+    "state-street",
+    "jpmorgan",
+    "morgan-stanley",
+    "goldman-sachs",
+    "wellington",
+    "invesco",
+    "franklin",
+    "capital-group",
+    "dodge-cox",
+    "t-rowe-price",
+    "brookfield",
+    "manulife",
+    "kkr",
+    "carlyle",
+    "gamco",
+})
+
+
+def investor_type_for_slug(slug: str) -> str:
+    return "INSTITUTIONAL" if slug in INSTITUTIONAL_SLUGS else "INDIVIDUAL"
+
+
 # name, slug, firm_name, firm_cik (10-digit zero-padded SEC CIK without prefix)
 US_INVESTORS = [
     ("Warren Buffett", "warren-buffett", "Berkshire Hathaway Inc", "0001067983"),
@@ -82,15 +109,22 @@ async def seed() -> None:
         existing_slugs = {row[0] for row in existing.all()}
 
         added = 0
+        updated_types = 0
         for name, slug, firm_name, firm_cik in US_INVESTORS:
+            itype = investor_type_for_slug(slug)
             if slug in existing_slugs:
+                result = await session.execute(select(Investor).where(Investor.slug == slug))
+                row = result.scalar_one_or_none()
+                if row and row.investor_type != itype:
+                    row.investor_type = itype
+                    updated_types += 1
                 continue
             session.add(
                 Investor(
                     slug=slug,
                     name=name,
                     country="US",
-                    investor_type="INSTITUTIONAL",
+                    investor_type=itype,
                     firm_name=firm_name,
                     firm_cik=firm_cik,
                     is_active=True,
@@ -100,7 +134,12 @@ async def seed() -> None:
             added += 1
 
         await session.commit()
-        logger.info("Seeded %s investors (%s skipped as duplicates)", added, len(US_INVESTORS) - added)
+        logger.info(
+            "Seeded %s new investors; updated %s types (%s unchanged)",
+            added,
+            updated_types,
+            len(US_INVESTORS) - added,
+        )
 
 
 def main() -> None:

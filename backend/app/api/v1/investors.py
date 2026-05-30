@@ -26,9 +26,14 @@ async def list_investors(
     investors, total = await investor_service.get_investors(
         db, country=country, investor_type=type, sort=sort, page=page, limit=limit
     )
-    return build_paginated_response(
-        [InvestorSummary.model_validate(i) for i in investors], total, page, limit
-    )
+    snapshots = await investor_service.attach_latest_snapshots(db, investors)
+    summaries = [
+        InvestorSummary.model_validate(
+            investor_service.investor_to_summary(i, snapshots.get(i.id))
+        )
+        for i in investors
+    ]
+    return build_paginated_response(summaries, total, page, limit)
 
 
 @router.get("/trending", response_model=list[InvestorSummary])
@@ -38,7 +43,13 @@ async def trending_investors(
     db: AsyncSession = Depends(get_db),
 ):
     investors = await investor_service.get_trending_investors(db, country=country, limit=limit)
-    return [InvestorSummary.model_validate(i) for i in investors]
+    snapshots = await investor_service.attach_latest_snapshots(db, investors)
+    return [
+        InvestorSummary.model_validate(
+            investor_service.investor_to_summary(i, snapshots.get(i.id))
+        )
+        for i in investors
+    ]
 
 
 @router.get("/{slug}", response_model=InvestorDetail)
@@ -50,8 +61,11 @@ async def get_investor(slug: str, db: AsyncSession = Depends(get_db)):
     snapshot = await investor_service.get_investor_snapshot(db, investor.id)
     history = await investor_service.get_portfolio_history(db, investor.id)
 
-    detail = InvestorDetail.model_validate(investor)
+    detail = InvestorDetail.model_validate(
+        investor_service.investor_to_summary(investor, snapshot)
+    )
     if snapshot:
+        detail.latest_filing_date = snapshot.report_date
         detail.sector_breakdown = snapshot.sector_breakdown or {}
         detail.top_holdings = snapshot.top_holdings or []
     detail.portfolio_history = [

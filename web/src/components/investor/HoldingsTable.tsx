@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useInvestorHoldings } from "@/hooks/useInvestor";
-import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
+import { formatCurrency, formatPercent, formatNumber, toNumber } from "@/lib/formatters";
+import { securityDisplaySubtitle, securityDisplayTitle } from "@/lib/securityDisplay";
 import { ChangeIndicator } from "@/components/shared/ChangeIndicator";
 import { Pagination } from "@/components/shared/Pagination";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -13,7 +14,13 @@ export function HoldingsTable({ slug }: { slug: string }) {
   const { data, isLoading } = useInvestorHoldings(slug, { sort, page, limit: 25 });
 
   if (isLoading) return <LoadingSpinner className="py-8" />;
-  if (!data?.data?.length) return <p className="py-8 text-center text-gray-400">No holdings data available</p>;
+  if (!data?.data?.length) {
+    return (
+      <p className="py-8 text-center text-gray-500">
+        No 13F holdings yet. Data appears after the next SEC filing ingest for this investor.
+      </p>
+    );
+  }
 
   return (
     <div>
@@ -40,25 +47,28 @@ export function HoldingsTable({ slug }: { slug: string }) {
             </tr>
           </thead>
           <tbody>
-            {data.data.map((h) => (
-              <tr key={h.security.id} className="border-b border-gray-100">
+            {data.data.map((h) => {
+              const sharesChange = toNumber(h.shares_change) ?? 0;
+              return (
+              <tr key={`${h.security.id}-${h.shares}-${h.value_usd}`} className="border-b border-gray-100">
                 <td className="py-3">
-                  <span className="font-medium text-gray-900">{h.security.ticker}</span>
-                  <p className="text-xs text-gray-500">{h.security.name}</p>
+                  <span className="font-medium text-gray-900">{securityDisplayTitle(h.security)}</span>
+                  <p className="text-xs text-gray-500">{securityDisplaySubtitle(h.security)}</p>
                 </td>
                 <td className="py-3 text-gray-700">{formatNumber(h.shares)}</td>
                 <td className="py-3 font-medium text-gray-900">{formatCurrency(h.value_usd)}</td>
                 <td className="py-3 text-gray-700">{formatPercent(h.pct_of_portfolio)}</td>
                 <td className="py-3">
                   <ChangeIndicator type={h.change_type} />
-                  {h.shares_change !== 0 && (
+                  {sharesChange !== 0 && (
                     <span className="ml-2 text-xs text-gray-500">
-                      {h.shares_change > 0 ? "+" : ""}{formatNumber(h.shares_change)}
+                      {sharesChange > 0 ? "+" : ""}{formatNumber(sharesChange)}
                     </span>
                   )}
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>
