@@ -74,11 +74,26 @@ async def compare_investors(
     for sids in holdings_by_investor.values():
         overlap &= sids
 
-    unique_to_each = {}
+    unique_to_each: dict[int, list[int]] = {}
     for inv_id, sids in holdings_by_investor.items():
         unique_to_each[inv_id] = list(sids - overlap)
 
+    all_ids = list(overlap | set().union(*unique_to_each.values()))
+    securities_by_id: dict[int, Security] = {}
+    if all_ids:
+        sec_result = await db.execute(select(Security).where(Security.id.in_(all_ids)))
+        securities_by_id = {s.id: s for s in sec_result.scalars().all()}
+
+    def _summarize(sec_id: int) -> dict:
+        s = securities_by_id.get(sec_id)
+        if not s:
+            return {"id": sec_id, "ticker": None, "name": None}
+        return {"id": s.id, "ticker": s.ticker, "name": s.name}
+
     return {
-        "overlap": list(overlap),
-        "unique_to_each": unique_to_each,
+        "overlap": [_summarize(sid) for sid in overlap],
+        "unique_to_each": {
+            str(inv_id): [_summarize(sid) for sid in sids]
+            for inv_id, sids in unique_to_each.items()
+        },
     }

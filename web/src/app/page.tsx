@@ -35,7 +35,12 @@ export default function Home() {
       </section>
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold text-gray-900">Recent Activity</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900">Recent Activity</h2>
+          <a href="/activity" className="text-sm text-blue-600 hover:underline">
+            View all
+          </a>
+        </div>
         <RecentActivity country={country} />
       </section>
     </div>

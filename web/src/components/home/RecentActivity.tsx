@@ -7,10 +7,10 @@ import { ChangeIndicator } from "@/components/shared/ChangeIndicator";
 import type { ChangeType } from "@/types/holding";
 import { SkeletonCard } from "@/components/shared/SkeletonCard";
 
-export function RecentActivity({ country }: { country?: string }) {
+export function RecentActivity({ country, limit = 10 }: { country?: string; limit?: number }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["activity", country],
-    queryFn: () => api.getActivityFeed({ country, limit: 10 }),
+    queryKey: ["activity", country, limit],
+    queryFn: () => api.getActivityFeed({ country, limit }),
   });
 
   if (isLoading) {

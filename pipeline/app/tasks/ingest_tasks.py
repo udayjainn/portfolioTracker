@@ -15,13 +15,19 @@ def _ingest_limit() -> int | None:
 
 
 @celery_app.task(bind=True, max_retries=2)
-def ingest_13f_incremental(self):
+def ingest_13f_incremental(
+    self,
+    limit: int | None = None,
+    force_reprocess: bool = False,
+):
     from app.ingestors.us.sec_13f_incremental import run_incremental_ingest
 
     logger.info("Starting 13F incremental ingest (edgartools)")
     try:
-        force = os.environ.get("FORCE_REPROCESS", "").lower() in ("1", "true", "yes")
-        stats = asyncio.run(run_incremental_ingest(limit=_ingest_limit(), force_reprocess=force))
+        effective_limit = limit if limit is not None else _ingest_limit()
+        stats = asyncio.run(
+            run_incremental_ingest(limit=effective_limit, force_reprocess=force_reprocess)
+        )
         logger.info("13F incremental complete: %s", stats)
         return stats
     except Exception as exc:

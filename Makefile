@@ -35,18 +35,33 @@ seed:
 	docker compose exec api python -m app.scripts.seed_investors
 
 ingest-13f:
-	docker compose exec celery-worker env INGEST_LIMIT=$(INGEST_LIMIT) \
-		celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_incremental
+ifdef INGEST_LIMIT
+	docker compose exec celery-worker celery -A app.celery_app call \
+		app.tasks.ingest_tasks.ingest_13f_incremental \
+		--kwargs='{"limit": $(INGEST_LIMIT), "force_reprocess": false}'
+else
+	docker compose exec celery-worker celery -A app.celery_app call \
+		app.tasks.ingest_tasks.ingest_13f_incremental \
+		--kwargs='{"force_reprocess": false}'
+endif
 
 ingest-13f-bulk:
 	docker compose exec celery-worker celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_bulk
 
 ingest-13f-all:
-	docker compose exec celery-worker celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_incremental
+	docker compose exec celery-worker celery -A app.celery_app call \
+		app.tasks.ingest_tasks.ingest_13f_incremental
 
 ingest-13f-reprocess:
-	docker compose exec celery-worker env FORCE_REPROCESS=true \
-		celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_incremental
+ifdef INGEST_LIMIT
+	docker compose exec celery-worker celery -A app.celery_app call \
+		app.tasks.ingest_tasks.ingest_13f_incremental \
+		--kwargs='{"limit": $(INGEST_LIMIT), "force_reprocess": true}'
+else
+	docker compose exec celery-worker celery -A app.celery_app call \
+		app.tasks.ingest_tasks.ingest_13f_incremental \
+		--kwargs='{"force_reprocess": true}'
+endif
 
 web:
 	cd web && npm run dev

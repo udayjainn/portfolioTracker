@@ -54,6 +54,15 @@ export const api = {
     return request(`/api/v1/investors/trending${buildQuery(params)}`);
   },
 
+  getSecurities(params: {
+    ticker?: string;
+    country?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<PaginatedResponse<SecuritySummary>> {
+    return request(`/api/v1/securities${buildQuery(params)}`);
+  },
+
   getSecurity(ticker: string): Promise<SecurityDetail> {
     return request(`/api/v1/securities/${ticker}`);
   },

@@ -65,6 +65,15 @@ export function Header() {
           <Link href="/investors" className="text-gray-600 hover:text-gray-900">
             Investors
           </Link>
+          <Link href="/securities" className="text-gray-600 hover:text-gray-900">
+            Securities
+          </Link>
+          <Link href="/activity" className="text-gray-600 hover:text-gray-900">
+            Activity
+          </Link>
+          <Link href="/compare" className="text-gray-600 hover:text-gray-900">
+            Compare
+          </Link>
           <Link href="/search" className="text-gray-600 hover:text-gray-900">
             Search
           </Link>
