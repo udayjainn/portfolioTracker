@@ -1,3 +1,5 @@
+"""Deprecated: Phase 1 uses edgartools (see ingestors/us/sec_13f_incremental.py)."""
+
 import asyncio
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta

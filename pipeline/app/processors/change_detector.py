@@ -1,4 +1,8 @@
-from datetime import date, timedelta
+from datetime import date
+
+from sqlalchemy import func, select
+
+from app.models.holding import Holding
 
 
 class ChangeDetector:
@@ -9,30 +13,25 @@ class ChangeDetector:
         report_date: date,
         db,
     ) -> list[dict]:
-        from sqlalchemy import select
-
-        # Import here to avoid circular deps at module level
-        from sys import path as sys_path
-        sys_path.insert(0, ".")
-
-        prev_date = report_date - timedelta(days=90)
-
         results = []
         current_security_ids = set()
-        prev_map = {}
+        prev_map: dict[int, Holding] = {}
 
-        try:
-            from app.models.holding import Holding  # type: ignore
-
-            prev_holdings = await db.execute(
-                select(Holding)
-                .where(Holding.investor_id == investor_id)
-                .where(Holding.report_date <= prev_date)
-                .order_by(Holding.report_date.desc())
+        prev_date_result = await db.execute(
+            select(func.max(Holding.report_date)).where(
+                Holding.investor_id == investor_id,
+                Holding.report_date < report_date,
             )
-            prev_map = {h.security_id: h for h in prev_holdings.scalars()}
-        except Exception:
-            pass
+        )
+        prev_report_date = prev_date_result.scalar()
+        if prev_report_date:
+            prev_holdings = await db.execute(
+                select(Holding).where(
+                    Holding.investor_id == investor_id,
+                    Holding.report_date == prev_report_date,
+                )
+            )
+            prev_map = {h.security_id: h for h in prev_holdings.scalars().all()}
 
         for holding in new_holdings:
             sec_id = holding.get("security_id")

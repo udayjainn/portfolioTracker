@@ -7,22 +7,10 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True, max_retries=3)
 def scrape_edgar_13f(self):
-    logger.info("Starting SEC EDGAR 13F scrape")
-    try:
-        import asyncio
-        from app.scrapers.us.edgar_13f import Edgar13FScraper
-        from app.config import settings
+    """Legacy task name — delegates to edgartools incremental ingest."""
+    from app.tasks.ingest_tasks import ingest_13f_incremental
 
-        async def run():
-            scraper = Edgar13FScraper(db_session=None, s3_client=None, config=settings)
-            await scraper.run()
-            await scraper.close()
-
-        asyncio.run(run())
-        logger.info("13F scrape completed")
-    except Exception as exc:
-        logger.error(f"13F scrape failed: {exc}")
-        self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+    return ingest_13f_incremental()
 
 
 @celery_app.task(bind=True, max_retries=3)

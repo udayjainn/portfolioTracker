@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     FIREBASE_PROJECT_ID: str = ""
     FIREBASE_CREDENTIALS_JSON: str | None = None
     CONTACT_EMAIL: str = "dev@portfoliotracker.com"
+    SEC_13F_BULK_URL: str = (
+        "https://www.sec.gov/files/structureddata/data/form-13f-data-sets/2024q4_13f.zip"
+    )
     ENVIRONMENT: str = "development"
 
     model_config = {"env_file": ".env", "extra": "ignore"}

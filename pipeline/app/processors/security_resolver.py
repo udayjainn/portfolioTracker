@@ -1,10 +1,19 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+
+from app.models.security import Security
 
 
 class SecurityResolver:
-    async def resolve(self, identifier: str, identifier_type: str, db) -> int | None:
-        from app.models.security import Security  # type: ignore
-
+    async def resolve(
+        self,
+        identifier: str,
+        identifier_type: str,
+        db,
+        *,
+        ticker: str | None = None,
+        name: str | None = None,
+    ) -> int | None:
         if identifier_type == "CUSIP":
             result = await db.execute(select(Security).where(Security.cusip == identifier))
         elif identifier_type == "ISIN":
@@ -19,16 +28,24 @@ class SecurityResolver:
             return security.id
 
         if identifier_type == "CUSIP":
+            display_ticker = (ticker or identifier).upper()[:20]
+            display_name = name or f"Unknown ({identifier})"
             new_security = Security(
-                ticker=identifier[:4].upper(),
-                name=f"Unknown ({identifier})",
+                ticker=display_ticker,
+                name=display_name[:255],
                 cusip=identifier,
-                exchange="UNKNOWN",
+                exchange="US" if ticker else "UNKNOWN",
                 country="US",
             )
             db.add(new_security)
-            await db.commit()
-            await db.refresh(new_security)
-            return new_security.id
+            try:
+                await db.flush()
+                await db.refresh(new_security)
+                return new_security.id
+            except IntegrityError:
+                await db.rollback()
+                retry = await db.execute(select(Security).where(Security.cusip == identifier))
+                existing = retry.scalar_one_or_none()
+                return existing.id if existing else None
 
         return None

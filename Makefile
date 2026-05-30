@@ -1,4 +1,4 @@
-.PHONY: dev dev-down dev-setup test-backend test-pipeline test-web test migrate seed web fmt
+.PHONY: dev dev-down dev-setup test-backend test-pipeline test-web test migrate seed web fmt ingest-13f ingest-13f-bulk
 
 # Host Postgres port when 5432 is already in use (see docker-compose.yml)
 DOCKER_DATABASE_URL ?= postgresql+asyncpg://postgres:postgres@localhost:5433/portfolio_tracker
@@ -33,6 +33,20 @@ migrate:
 
 seed:
 	docker compose exec api python -m app.scripts.seed_investors
+
+ingest-13f:
+	docker compose exec celery-worker env INGEST_LIMIT=$(INGEST_LIMIT) \
+		celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_incremental
+
+ingest-13f-bulk:
+	docker compose exec celery-worker celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_bulk
+
+ingest-13f-all:
+	docker compose exec celery-worker celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_incremental
+
+ingest-13f-reprocess:
+	docker compose exec celery-worker env FORCE_REPROCESS=true \
+		celery -A app.celery_app call app.tasks.ingest_tasks.ingest_13f_incremental
 
 web:
 	cd web && npm run dev
