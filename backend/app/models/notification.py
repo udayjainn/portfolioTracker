@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,6 @@ class Notification(Base):
     user = relationship("User", back_populates="notifications")
 
     __table_args__ = (
-        Index("idx_notifications_user_unread", "user_id", "is_read", postgresql_where=(~Boolean())),
-        Index("idx_notifications_created", created_at.desc()),
+        Index("idx_notifications_user_unread", "user_id", "is_read", postgresql_where=text("NOT is_read")),
+        Index("idx_notifications_created", "created_at"),
     )

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -7,12 +8,18 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+_repo_root = Path(__file__).resolve().parent.parent
+for _backend in (_repo_root / "backend", Path("/app")):
+    if _backend.is_dir():
+        sys.path.insert(0, str(_backend))
+        break
 
 from app.database import Base
 from app.models import *  # noqa: F401, F403
 
 config = context.config
+if os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

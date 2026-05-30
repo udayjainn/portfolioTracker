@@ -198,14 +198,16 @@ Env: `web/.env.local` → `NEXT_PUBLIC_API_URL=http://localhost:8000`
 docker compose up -d          # api, db, redis, celery-worker, celery-beat
 cd web && npm install && npm run dev
 
-# Migrations (after 001 revision exists):
-cd migrations && alembic upgrade head
+# One-shot local stack + schema + seed (Docker; Postgres on host port 5433):
+make dev-setup
 
-# Seed (after seed script exists):
-cd backend && python -m app.scripts.seed_investors
+# Or step by step:
+make dev
+make migrate
+make seed
 ```
 
-**Known Makefile bug:** `make migrate` runs `cd backend && alembic` but Alembic lives in `migrations/`. Use `cd migrations && alembic upgrade head` until Makefile is fixed.
+**Ports:** If `5432` / `6379` are already in use, Compose maps **5433** / **6380** on the host (see `docker-compose.yml` and `.env.example`).
 
 API docs (dev): http://localhost:8000/docs
 
